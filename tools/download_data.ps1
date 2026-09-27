@@ -6,7 +6,7 @@
   .\tools\download_data.ps1                                   # all exercises
   .\tools\download_data.ps1 exercises\09-lidar-dtm-chm-forest-stands
 #>
-param([string[]]$Exercise)
+param([Parameter(ValueFromRemainingArguments)][string[]]$Exercise)
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference    = 'SilentlyContinue'   # makes Invoke-WebRequest much faster
