@@ -1,0 +1,10 @@
+* text=auto
+*.sh text eol=lf
+*.ps1 text eol=crlf
+*.tif binary
+*.las binary
+*.gpkg binary
+*.qgz binary
+*.jpg binary
+*.png binary
+*.xlsx binary

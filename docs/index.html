@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Remote Sensing Reports</title>
+  <style>
+    :root { --bg:#fafaf8; --fg:#1d232a; --muted:#5b6570; --card:#fff; --line:#e3e5e8; --accent:#1f6f5c; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#14181c; --fg:#e6e8ea; --muted:#9aa4ae; --card:#1c2126; --line:#2c333a; --accent:#5fc2a6; }
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 860px; margin: 0 auto; padding: 48px 16px 64px; }
+    h1 { font-size: 1.9rem; margin: 0 0 .3rem; }
+    p.lead { color: var(--muted); margin: 0 0 2rem; }
+    .grid { display:grid; gap:16px; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+    a.card { display:block; background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden;
+             color:inherit; text-decoration:none; transition: border-color .15s; }
+    a.card:hover { border-color: var(--accent); }
+    a.card img { width:100%; aspect-ratio: 4/3; object-fit: cover; display:block; background:#fff; }
+    a.card div { padding: 12px 14px 14px; }
+    a.card strong { display:block; margin-bottom:4px; }
+    a.card span { color: var(--muted); font-size: .9rem; }
+    footer { margin-top: 2.5rem; color: var(--muted); font-size: .9rem; }
+    footer a { color: var(--accent); }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Advanced Remote Sensing &amp; Geomatics</h1>
+  <p class="lead">Rendered R Markdown reports from my course exercises (winter term 2023/24).</p>
+
+  <div class="grid">
+    <a class="card" href="05-spectral-indices.html">
+      <img src="assets/sentinel2-spectral-signatures.jpg" alt="">
+      <div><strong>Spectral signatures &amp; vegetation indices</strong>
+      <span>Sentinel-2 · feature spaces · NDVI, EVI, PVI</span></div>
+    </a>
+    <a class="card" href="06-hyperspectral-tree-species.html">
+      <img src="assets/hymap-svm-tree-species.jpg" alt="">
+      <div><strong>Hyperspectral tree-species classification</strong>
+      <span>HyMap · SVM &amp; random forest</span></div>
+    </a>
+    <a class="card" href="07-enmap-biomass-regression.html">
+      <img src="assets/enmap-biomass-rf.jpg" alt="">
+      <div><strong>Above-ground biomass regression</strong>
+      <span>EnMAP · random forest regression</span></div>
+    </a>
+  </div>
+
+  <footer>Code, data download and all other exercises:
+    <a href="https://github.com/toihr/Advanced-Remote-Sensing-Exercises">github.com/toihr/Advanced-Remote-Sensing-Exercises</a>
+  </footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,242 @@
+---
+title: "Spectral Signatures and Vegetation Indices (Sentinel-2)"
+author: "Tom Ihro"
+date: "2023-11-14"
+output: html_document
+---
+
+```{r}
+
+library(terra)
+
+img = rast("data/sen2_20200821_sen2b.tif")
+img = img/100 #setting for reflectivity
+setMinMax(img)
+
+#set negative values to nan
+#img[img < 0] = NaN
+
+plotRGB(img,4,3,2,stretch = "lin")
+```
+
+```{r warning=FALSE,}
+landcover <- vect("data/landcoverNew.kml")
+landcover = project(landcover, img)
+
+writeVector(landcover,"data/landcoverclasses.gpkg",overwrite = TRUE)
+
+
+plotRGB(img, r=8, g=3, b=2, stretch="lin")
+plot(landcover, add=TRUE, col = "green")
+```
+
+```{r,}
+
+img.extract <- extract(img, landcover, fun=mean)
+
+names(img.extract) <- c("ID", "blue", "green", "red", "RE1", "RE2", "RE3", "NIR_b", "NIR_a", "SWIR1", "SWIR2")
+row.names(img.extract) <- c(landcover$Name)
+
+img.extract
+```
+
+```{r}
+img.extract[1,2:11]
+```
+
+```{r}
+
+lambda<-c(490,560, 665, 705, 740, 783, 842, 865, 1610, 2190)
+
+landcover_col <- c("forest green", 
+                   "blue1", 
+                   "light blue", 
+                   "grey", 
+                   "light green",
+                   "beige",
+                   "steelblue",
+                   "red",
+                   "darkseagreen",
+                   "green3")
+
+plot(lambda,img.extract[1,2:11],
+     col = "forest green",
+     xlab="Wavelength [nm]", 
+     ylab="reflectance (%)", 
+     main="reflectance spectra",
+     lwd=2, type='b',
+     xlim=c(400,2700), 
+     ylim=c(0,40))
+
+#loop through all landcover classes
+for(i in 2:10){
+  lines(lambda, img.extract[i,2:11], col = landcover_col[i],lwd=2, type='b')
+}
+
+legend('topright', title='Landcover', 
+       legend=row.names(img.extract),
+       fill=landcover_col,
+       cex = 0.8, bty="n")
+```
+
+```{r, warning=F}
+
+plot(img[[2]], img[[3]],  xlab="green", ylab="red", xlim=c(0,40), ylim=c(0,40), maxcell = 100000,  col= "gray35")
+
+ran = 1:5
+
+for(i in ran){
+  points(img.extract[i,"green"],img.extract[i,"red"], col=landcover_col[i], cex=2, pch=19)
+}
+
+legend('topright', title='Landcover', 
+       legend=row.names(img.extract)[ran],
+       fill=landcover_col[ran],
+       cex = 0.8, bty="n") 
+
+```
+
+# Homework
+
+## 1. Feature Space
+
+```{r, warning=FALSE}
+plot(img[[3]], img[[8]],  xlab="red", ylab="NIR", xlim=c(0,40), ylim=c(0,40), maxcell = 100000,  col= "gray35")
+
+ran = 1:5 #Define the range of which classes we are looking at
+
+for(i in ran){
+  points(img.extract[i,"red"],img.extract[i,"NIR_a"], col=landcover_col[i], cex=2, pch=19)
+}
+
+legend('topright', title='Landcover', 
+       legend=row.names(img.extract)[ran],
+       fill=landcover_col[ran],
+       cex = 0.8, bty="n") 
+```
+
+```{r, warning=FALSE}
+
+plot(img[[8]], img[[9]],  xlab="NIR_a", ylab="SWIR1", xlim=c(0,40), ylim=c(0,40), maxcell = 100000,  col= "gray35")
+
+ran = 1:5 #Define the range of which classes we are looking at
+
+for(i in ran){
+  points(img.extract[i,"NIR_a"],img.extract[i,"SWIR1"], col=landcover_col[i], cex=2, pch=19)
+}
+
+legend('topright', title='Landcover', 
+       legend=row.names(img.extract)[ran],
+       fill=landcover_col[ran],
+       cex = 0.8, bty="n") 
+```
+
+Unlike for the Visual bands for the NIR and SWIR bands the bands seem to not be correlated that much. As one can observe by the differing Feature spaces the higher
+
+## NDVI
+
+```{r}
+
+NDVI = (img[[8]] - img[[3]])/(img[[8]] + img[[3]])
+
+#adopt range -1,1 as that is the range that the NDVI function works on. 
+plot(NDVI,stretch = "lin",range = c(-1,1))
+```
+
+```{r}
+
+NDVI.class = NDVI
+
+#Classify to 1 -> Water 2 -> Land
+NDVI.class[NDVI < 0] = 1
+NDVI.class[NDVI >= 0] = 2
+
+color = data.frame(value = c(1,2), color = c("lightblue","brown"))
+
+plot(NDVI.class,col = color$color,type = "classes",levels = c("Water","Land"))
+```
+
+## EVI
+
+```{r}
+
+G = 2.5
+C1 = 6
+C2 = 7.5
+L = 1
+
+rhoNIR = img$sen2_20200821_sen2b_7/100
+rhoRED = img$sen2_20200821_sen2b_3/100
+rhoBLUE = img$sen2_20200821_sen2b_1/100
+
+
+EVI = G*((rhoNIR - rhoRED)/(rhoNIR + C1*rhoRED - C2*rhoBLUE+L))
+
+
+plot(EVI,range = c(-0.2,1))
+
+```
+
+## PVI
+
+```{r, warning=FALSE}
+
+X = c(5,25)
+Y = c(8,23)
+
+
+par(mfrow = c(1,1), pty = "s")
+plot(img[[3]], img[[8]],  xlab="red", ylab="NIR", xlim=c(0,40), ylim=c(0,40), maxcell = 100000,  col= "gray35")
+grid()
+points(X,Y, col = "red")
+```
+
+```{r}
+
+a = (Y[2] - Y[1])/(X[2]-X[1])
+b = Y[1] - a*X[1]
+
+
+PVI = (img[[8]] - a*img[[3]]-b)/sqrt(1+a^2)
+
+plot(PVI,range=c(-10,40))
+```
+
+## Compare Indexes
+
+```{r}
+
+
+```
+
+```{r, warning=FALSE}
+
+
+plot(NDVI,EVI,maxcell = 100000,
+     xlim=c(-0.2,1),
+     ylim=c(-1,1),
+     xlab ="NDVI",
+     ylab ="EVI",
+     )
+
+```
+
+```{r, warning=FALSE}
+plot(NDVI,PVI,maxcell = 1000000,
+     xlim=c(-1,1),
+     ylim=c(-10,40),
+     xlab ="NDVI",
+     ylab ="PVI",
+     )
+```
+
+```{r, warning=FALSE}
+plot(EVI,PVI,maxcell = 100000,
+     xlim=c(-1,1),
+     ylim=c(-10,40),
+     xlab ="EVI",
+     ylab ="PVI",
+     )
+```
+
+We can see that especially with the EVI vs PVI scatter plot that these two seem to correlate the most. Compared to the NDVI vs PVI which has alot of degeneracy at $PVI \approx -4$ which means that there can be alot of NDVI values corresponding to that specific PVI value.

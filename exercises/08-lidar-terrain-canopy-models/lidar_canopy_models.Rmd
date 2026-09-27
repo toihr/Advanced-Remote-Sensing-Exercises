@@ -1,0 +1,99 @@
+---
+title: "Airborne LiDAR: Terrain, Canopy Models and Tree Segmentation"
+author: "Tom Ihro"
+date: "2023-12-05"
+output: html_document
+---
+
+## 3.1 Reading the Data
+
+```{r}
+library(lidR)
+
+las = readLAS("data/3dm_33_378_5815_1_be.las")
+las = clip_rectangle(las,378000,5815000,378000+100,5815000 + 100)
+```
+
+## 3.2 Visualizing the data
+
+```{r}
+plot(las)
+```
+
+```{r}
+vox <- voxelize_points(las, 6)
+plot(vox, voxel = TRUE, bg = "white")
+```
+
+```{r}
+p1 <- c(378000, 5815000)
+p2 <- c(378000+100, 5815000+100)
+las_tr <- clip_transect(las, p1, p2, width = 4, xz = TRUE)
+
+library(ggplot2)
+
+ggplot(las_tr@data, aes(X,Z, color = Z)) + 
+  geom_point(size = 0.5) + 
+  coord_equal() + 
+  theme_minimal() +
+  scale_color_gradientn(colours = height.colors(50))
+```
+
+## DTM
+
+To create a DTM we first need to identify the ground to do this we use the Cloth Simulation method
+
+```{r}
+dtm_tin <- rasterize_terrain(las, res = 1, algorithm = tin())
+plot_dtm3d(dtm_tin, bg = "white") 
+```
+
+Creating a hillshade image:
+
+```{r}
+library(terra)
+
+dtm_tin.slope = terra::terrain(dtm_tin,v="slope",unit="degrees")
+dtm_tin.aspect = terra::terrain(dtm_tin,v="aspect",unit="degrees")
+dtm_tin.hill = shade(dtm_tin.slope,dtm_tin.aspect,45,90)
+
+ggplot() + geom_spatraster(data=dtm_tin.hill)
+```
+
+## DSM
+
+```{r}
+dsm <- rasterize_canopy(las, res = 1, algorithm = p2r())
+
+ggplot() + geom_spatraster(data=dsm) + scale_fill_terrain_c() + ggtitle("Digital Surface Model")
+```
+
+```{r}
+dtm_norm = las - dtm_tin
+
+chm = rasterize_canopy(dtm_norm, res = 1, algorithm = p2r())
+
+ggplot() + geom_spatraster(data=chm) + scale_fill_terrain_c() +ggtitle("Canopy Height Model")
+```
+
+## Tree Detection
+
+```{r}
+
+ttops <- locate_trees(las, lmf(ws = 5))
+
+ggplot() + geom_spatraster(data=chm) + scale_fill_terrain_c() + geom_spatvector(data=ttops)
+```
+
+```{r}
+algo <- dalponte2016(chm, ttops)
+las <- segment_trees(las, algo) # segment point cloud
+plot(las, bg = "white", size = 4, color = "treeID") # visualize trees
+```
+
+```{r}
+
+chm.segment = algo()
+
+ggplot() + geom_spatraster(data=chm.segment) + scale_fill_gradientn(colours=pastel.colors(200))
+```

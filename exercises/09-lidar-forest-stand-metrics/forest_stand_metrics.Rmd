@@ -1,0 +1,168 @@
+---
+title: "LiDAR Metrics and Forest Stand Inventory"
+author: "Tom Ihro"
+date: "2023-12-05"
+output: html_document
+---
+
+## 3.1 Reading the Data
+
+```{r}
+library(ggplot2)
+library(lidR)
+library(tidyterra)
+
+las1 = readLAS("data/3dm_33_378_5815_1_be.las")
+las1 = clip_rectangle(las1,378000,5815000,378000+500,5815000 + 500)
+crs(las1) <- 'EPSG:25833'
+
+las2 = readLAS("data/3dm_33_380_5815_1_be.las")
+las2 = clip_rectangle(las2,380000,5815000, 380000+500, 5815000 + 500)
+crs(las2) <- 'EPSG:25833'
+
+```
+
+## DTM
+
+To create a DTM we first need to identify the ground to do this we use the Cloth Simulation method
+
+```{r}
+las1 <- classify_ground(las1, algorithm = csf())
+las2 <- classify_ground(las2, algorithm = csf())
+```
+
+```{r}
+dtm_tin1 <- rasterize_terrain(las1, res = 1, algorithm = tin())
+dtm_tin2 <- rasterize_terrain(las2, res = 1, algorithm = tin())
+```
+
+```{r}
+dtm_norm1 = las1 - dtm_tin1
+dtm_norm2 = las2 - dtm_tin2
+
+
+chm_1 = rasterize_canopy(dtm_norm1, res = 1, algorithm = p2r())
+chm_2 = rasterize_canopy(dtm_norm2, res = 1, algorithm = p2r())
+
+p1 <- ggplot() + geom_spatraster(data=chm_1) + scale_fill_terrain_c() + ggtitle("Canopy Height Model")
+#p2 <- ggplot() + geom_spatraster(data=chm_2) + scale_fill_terrain_c() +ggtitle("Canopy Height Model")
+```
+
+```{r}
+
+library(terra)
+library(gridExtra)
+
+Forst = vect("data/forst_bestand.shp")
+Forst1 = crop(Forst, chm_1)
+Forst2 = crop(Forst, chm_2)
+
+```
+
+```{r}
+p1 + geom_spatvector(data = Forst1,fill="transparent")
+```
+
+Here we cannot see any interesting structures purely from the CHM that correspond to the Vector Data.
+
+```{r}
+
+PrimaryPercent = Forst1$s1_1_misch
+PrimaryName = Forst1$s1_1_deuts
+PrimaryHeight = Forst1$s1_1_hoehe
+PrimaryAge = Forst1$grpalter
+
+custom_label = paste0(PrimaryName,"\nh=",PrimaryHeight," age=",PrimaryAge)
+```
+
+```{r}
+ggplot() + geom_spatvector(data=Forst1,aes(fill=best_dist),color = "black",alpha=0.4) + scale_fill_discrete(labels=custom_label)
+```
+
+```{r}
+Forst1[[c(1,10)]]
+```
+
+If one looks at the Percentage that the primary tree species make up we can see that only 3 of them can be considered a pure stand. So we mostly have highly mixed stands.
+
+# 3.3.
+
+```{r}
+
+p1 + geom_spatvector(data=Forst1,aes(fill=s1_1_hoehe),color = "black",alpha=0.6) + scale_fill_terrain_c()
+```
+
+Here we overplot the CHM with the height of the primary species of the tree stand and as you can see by using the same color scale the average of the CHM height is similar to the height of the primary species.
+
+# 3.2.1. Lidar Metrics at the Pixel level
+
+We are using a low resolution with 20 pixels and a high resolution with 4 pixels
+
+```{r}
+
+metrics = c("zmax","zmean","zsd","imean","imax","isd")
+
+metHigh = pixel_metrics(las1,.stdmetrics,4)
+metLow = pixel_metrics(las1,.stdmetrics,20)
+
+
+plot(metHigh[[metrics]])
+
+```
+
+```{r}
+
+extractMean1 = extract(metHigh,Forst1, fun = mean, bind=T)
+extractMean1 = data.frame(extractMean1)
+
+metHigh2 = pixel_metrics(las2, .stdmetrics,4)
+extractMean2 = extract(metHigh2,Forst2, fun = mean, bind=T)
+extractMean2 = data.frame(extractMean2)
+
+
+extractMean.comb = rbind(extractMean1,extractMean2)
+
+
+ggplot() + geom_boxplot(data = extractMean.comb, aes(x =s1_1_deuts ,y = zmean)) +
+  labs(x="Tree Stands by Type")
+```
+
+```{r}
+ggplot() + geom_boxplot(data = extractMean.comb, aes(x =s1_1_deuts ,y = zsd)) + labs(x="Tree Stands by Type")
+```
+
+# 3.2.1 Lidar Metrics at the Tree Level
+
+```{r}
+
+
+ttops1 <- locate_trees(las1, lmf(ws = 5))
+algo <- dalponte2016(chm_1, ttops1)
+las1 <- segment_trees(las1, algo)
+treeMet = crown_metrics(las1,.stdmetrics_z, geom="convex")
+```
+
+```{r}
+plist = list()
+
+mets = c("zmax","zmean","zsd", "zentropy")
+
+for(i in 1:4){
+  
+  print(mets[[i]])
+ p1 <- ggplot() + 
+   geom_spatvector(data=treeMet,aes_string(fill = mets[[i]] )) +
+   geom_spatvector(data=Forst1,fill="transparent",color="red") + 
+   coord_sf(xlim=c(378000 + 50 ,378000+350),ylim=c(5815000+50,5815000+350)) 
+ 
+ plist[[i]] <- p1
+ 
+}
+
+
+grid.arrange(grobs=plist,ncol=2)
+
+
+```
+
+Once again here we can see that the forests do not differ significantly from each other. My working theory is currently that this is caused by the different forest stands being rather well mixed and therefore not differing much on an stand by stand basis. If we had largely pure stands the different trees might strongly differ in height for example.

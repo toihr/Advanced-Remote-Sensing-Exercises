@@ -1,0 +1,162 @@
+---
+title: "Above-Ground Biomass Regression with EnMAP"
+author: "Tom Ihro"
+date: "2023-11-28"
+output: html_document
+---
+
+## 
+
+## 
+
+```{r, warning=FALSE}
+library("randomForest")
+library("terra")
+
+enmap.image <- rast("data/enmap_sonoma.bsq")
+biomass <- vect("data/agb_sonoma.gpkg")
+
+
+wl.valid <- c(423,  429,  434,  440,  445,  450,  455,  460,  464,  469,  474,  479,  484,  488,  493,  498,  503,  508,  513,  518,  523,  528,  533,  538,   543,  548,  553,  559,  564,  569,  575,  580,  586,  592,  597,  603,  609,  615,  621,  627,  633,  639,  645,  652,  658,  665,  671,  678,   685,  691,  698,  705,  712,  719,  726,  733,  740,  748,  755,  762,  770,  777,  785,  793,  800,  808,  816,  823,  831,  839,  847,  855,   863,  871,  879,  887,  895,  903,  905,  911,  914,  920,  924,  928,  954,  961,  965,  969,  975,  977,  985,  986,  996, 1007, 1018, 1029,  1040, 1051, 1063, 1074, 1085, 1097, 1109, 1120, 1132, 1144, 1155, 1167, 1179, 1191, 1203, 1215, 1227, 1239, 1251, 1263, 1275, 1287, 1299, 1476,  1488, 1499, 1511, 1522, 1534, 1545, 1556, 1568, 1579, 1590, 1601, 1612, 1623, 1634, 1645, 1656, 1667, 1678, 1689, 1699, 1710, 1721, 1731, 1742,  1752, 1762, 1773, 2053, 2062, 2071, 2080, 2089, 2098, 2106, 2115, 2124, 2133, 2141, 2150, 2159, 2167, 2176, 2184, 2193, 2201, 2209, 2218, 2226,  2234, 2243, 2251, 2259, 2267, 2275, 2283, 2291, 2299, 2307, 2315, 2323, 2331, 2339, 2347, 2355, 2363, 2370, 2378, 2386, 2393, 2401, 2409, 2416,  2424, 2431, 2439)
+
+
+```
+
+## Task 1
+
+```{r}
+library("tidyterra")
+library("ggplot2")
+
+ggplot() + geom_spatraster(aes(),data = enmap.image[[1]],) + 
+  geom_spatvector(data = biomass) + 
+  scale_fill_terrain_c(limit = c(0,1000))
+```
+
+## Task 2
+
+```{r}
+
+enmap.extract = extract(enmap.image,biomass)
+```
+
+## Task 3
+
+```{r}
+
+
+for (i in 1:nrow(enmap.extract)){
+
+  par(new=T) 
+  plot(wl.valid, enmap.extract[i,2:196]/100, type="l", 
+       col=biomass$biomass[i],  ylim=c(0,40), 
+       ylab="Reflectance (%)", xlab="wavelength (nm)")
+
+}
+```
+
+```{r}
+enmap.extract.na <- enmap.extract[rowSums(is.na(enmap.extract[,2:196])) != ncol(enmap.extract[,2:196]),]
+
+wl.names <- paste("n", as.character(wl.valid), sep="")
+colnames(enmap.extract.na)[2:196] <- wl.names
+
+biomass.na <- biomass[rowSums(is.na(enmap.extract[,2:196])) != ncol(enmap.extract[,2:196]),]
+
+data <- cbind(values(biomass.na), enmap.extract.na[,2:196])
+```
+
+## Task 4
+
+The default for the variable mtry for regression is $\frac{p}{3}$ where $p$ is the number of variables.
+
+## Task 5
+
+Nodesize controls the minimal size of the terminal node this controls the sizte of trees to be grown.
+
+## Task 6
+
+```{r}
+
+enmap.rf <- randomForest(biomass ~ .,data=data,
+                  ntree = 1000, 
+                  mtry = 196/3,
+                  importance=T
+                  )
+```
+
+```{r}
+varImpPlot(enmap.rf)
+```
+
+```{r}
+par(pty="s")
+plot(biomass.na$biomass, enmap.rf$predicted, xlim=c(0,500), ylim=c(0,500))
+```
+
+## Task 7
+
+```{r}
+enmap.rf
+```
+
+The Explained Variance is given by 72.52% . The explained Variance is the Variance that explains the variation of the data. Aka an Explained Variance of 100% explains 100% of the variation that can be found in the data with the model and if it were 0% then it would not explain any % of the Variation in the Data.
+
+```{r}
+names(enmap.image) <- names(enmap.extract.na[2:196])
+enmap.biomass <- terra::predict(enmap.image, enmap.rf,
+                  filename = "sonoma_rf.tif",
+                  overwrite = TRUE,
+                  na.rm = T
+)
+```
+
+```{r}
+ggplot() + geom_spatraster(data = enmap.biomass) + scale_fill_terrain_c()
+```
+
+## Task 8
+
+We decide to use the Normalidced Difference Leaf Canopy Biomass that is calculated by:
+
+$\frac{2160nm - 1540nm}{2160nm + 1540nm}$
+
+where we will use
+
+```{r}
+
+LeafCanopyBiomass = (enmap.image$n2159 - enmap.image$n1545)/(enmap.image$n2159 + enmap.image$n1545)
+
+
+ggplot() + geom_spatraster(data = LeafCanopyBiomass) + scale_fill_terrain_c()
+```
+
+## Task 9
+
+```{r}
+extractedIndex = extract(LeafCanopyBiomass,biomass)
+extractedClass = extract(enmap.biomass,biomass)
+
+par(pty="s")
+plot(extractedIndex$n2159, extractedClass$lyr1)
+```
+
+As you can see in the scatterplot allready while there is a certain trend of correlation it is very weak. Aswell as the Maps do not realy match. This means that the chosen index might not be the best way to describe biomass. And or the Classification Process of a Random Forrest is just more advanced than a simple narrow band index.
+
+## Task 10
+
+```{r}
+
+par(pty="s")
+plot(extractedIndex$n2159, biomass$biomass)
+```
+
+```{r}
+
+Correlation = cor(extractedIndex$n2159,biomass$biomass,use ="complete.obs") 
+R2 = Correlation^2
+
+print(c("Correlation",Correlation))
+
+print(c("R^2",R2))
+```
